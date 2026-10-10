@@ -1,0 +1,6 @@
+{
+  "name": "FrostSow Garden Planner",
+  "description": "Precision garden planting calendar that tells you what to sow and transplant this week based on your local frost dates.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
