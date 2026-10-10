@@ -118,6 +118,19 @@ export interface BedWateringLogEntry {
   source?: 'manual' | 'natural_rain';
 }
 
+export interface HarvestRecord {
+  id: string;
+  plantId: string;
+  plantName: string;
+  category: PlantCategory;
+  bedId: string;
+  bedName: string;
+  harvestDate: string; // YYYY-MM-DD
+  weightLbs: number; // in pounds
+  count?: number;
+  notes?: string;
+}
+
 export interface GardenBed {
   id: string;
   name: string;
@@ -132,6 +145,8 @@ export interface GardenBed {
   soilMoistureLevel?: BedMoistureLevel;
   wateringNotes?: string;
   wateringHistory?: BedWateringLogEntry[];
+  // Harvest Logs
+  harvestLogs?: HarvestRecord[];
 }
 
 export interface GardenBedPlant {
@@ -144,4 +159,8 @@ export interface GardenBedPlant {
   method: SowingMethod;
   notes?: string;
   isHarvested?: boolean;
+  harvestedDate?: string; // YYYY-MM-DD
+  harvestWeightLbs?: number; // in pounds
+  harvestCount?: number;
+  harvestNotes?: string;
 }

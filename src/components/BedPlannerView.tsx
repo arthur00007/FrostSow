@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GardenBed, LocationData, Plant } from '../types/garden';
+import { GardenBed, GardenBedPlant, LocationData, Plant, PlantCategory } from '../types/garden';
 import { PLANTS } from '../data/plants';
 import { fetchWeatherForecast, WeatherForecastResult } from '../services/weatherService';
 import { BedWaterTracker } from './BedWaterTracker';
@@ -7,14 +7,18 @@ import {
   WaterWeatherSummaryBanner,
   BedWaterFilter,
 } from './WaterWeatherSummaryBanner';
+import { HarvestYieldVisualization } from './HarvestYieldVisualization';
+import { LogHarvestModal } from './LogHarvestModal';
 import { calculateBedWaterReminder } from '../utils/waterTrackerUtils';
+import { getEstimatedHarvestWeight } from '../utils/harvestYieldUtils';
 import {
   Plus,
   Trash2,
   CheckCircle2,
   Sprout,
   Filter,
-  Calendar,
+  Scale,
+  Edit2,
 } from 'lucide-react';
 
 interface BedPlannerViewProps {
@@ -30,6 +34,20 @@ interface BedPlannerViewProps {
   onUpdateBedWatering: (bedId: string, updates: Partial<GardenBed>) => void;
   onWaterBedNow: (bedId: string, volume?: 'light' | 'moderate' | 'deep', date?: string) => void;
   onWaterAllDueBeds: (dueBedIds: string[]) => void;
+  onLogHarvest: (
+    bedId: string,
+    plantEntryId: string | null,
+    harvestDetails: {
+      plantId: string;
+      plantName: string;
+      category: PlantCategory;
+      weightLbs: number;
+      harvestDate: string;
+      count?: number;
+      notes?: string;
+    }
+  ) => void;
+  onSeedSampleHarvests?: () => void;
 }
 
 export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
@@ -45,11 +63,18 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
   onUpdateBedWatering,
   onWaterBedNow,
   onWaterAllDueBeds,
+  onLogHarvest,
+  onSeedSampleHarvests,
 }) => {
   const [newBedName, setNewBedName] = useState('');
   const [newBedType, setNewBedType] = useState<GardenBed['type']>('Raised Bed');
   const [isCreatingBed, setIsCreatingBed] = useState(false);
   const [activeFilter, setActiveFilter] = useState<BedWaterFilter>('all');
+
+  // Harvest Logging Modal state
+  const [isHarvestModalOpen, setIsHarvestModalOpen] = useState(false);
+  const [targetBedId, setTargetBedId] = useState<string | undefined>(undefined);
+  const [targetPlanting, setTargetPlanting] = useState<GardenBedPlant | null>(null);
 
   // Weather state
   const [weather, setWeather] = useState<WeatherForecastResult | null>(null);
@@ -106,6 +131,13 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  // Open Log Harvest modal for a specific planting
+  const handleOpenHarvestModal = (bedId: string, planting?: GardenBedPlant) => {
+    setTargetBedId(bedId);
+    setTargetPlanting(planting || null);
+    setIsHarvestModalOpen(true);
+  };
+
   // Filter beds according to water status filter
   const filteredBeds = useMemo(() => {
     if (activeFilter === 'all') return beds;
@@ -135,17 +167,24 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-stone-200 dark:border-stone-800">
         <div>
           <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider mb-1">
-            Active Garden Beds & Irrigation Log
+            Active Garden Beds & Harvest Tracker
           </div>
           <h1 className="text-2xl sm:text-3xl font-serif font-bold text-stone-900 dark:text-stone-100">
-            My Garden Beds & Water Tracker
+            My Garden Beds & Harvest Yields
           </h1>
           <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">
-            Track what you’ve sown, log bed waterings, and receive automatic reminders based on local temperature and rainfall forecasts.
+            Track active crops, record harvested vegetable weights over the season, and monitor local weather hydration reminders.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleOpenHarvestModal(beds[0]?.id || '')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-950/60 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800 rounded-md transition-colors shadow-2xs"
+          >
+            <Scale className="w-3.5 h-3.5" />
+            <span>Record Harvest</span>
+          </button>
           <button
             onClick={() => setIsCreatingBed(true)}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-md transition-colors shadow-xs"
@@ -227,6 +266,14 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
         onWaterAllDueBeds={onWaterAllDueBeds}
       />
 
+      {/* Recharts Harvest Yield Visualization Component */}
+      <HarvestYieldVisualization
+        beds={beds}
+        isCelsius={isCelsius}
+        onOpenLogHarvestModal={() => handleOpenHarvestModal(beds[0]?.id || '')}
+        onSeedSampleHarvests={onSeedSampleHarvests}
+      />
+
       {/* Bed List */}
       <div className="space-y-6">
         {filteredBeds.length === 0 ? (
@@ -276,6 +323,13 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleOpenHarvestModal(bed.id)}
+                      className="px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded transition-colors"
+                      title="Log a harvest from this bed"
+                    >
+                      + Log Harvest
+                    </button>
                     <button
                       onClick={() => onDeleteBed(bed.id)}
                       className="p-1.5 text-stone-400 dark:text-stone-500 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
@@ -354,13 +408,14 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
                                     </div>
                                   </div>
 
-                                  {/* Mark as Harvested */}
+                                  {/* Log Harvest with Weight */}
                                   <button
-                                    onClick={() => onToggleHarvested(bed.id, item.id)}
-                                    className="px-2.5 py-1 text-xs text-stone-600 dark:text-stone-300 hover:text-emerald-700 dark:hover:text-emerald-400 bg-stone-100 dark:bg-stone-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-stone-200 dark:border-stone-700 rounded transition-colors"
-                                    title="Mark crop as harvested"
+                                    onClick={() => handleOpenHarvestModal(bed.id, item)}
+                                    className="px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-950/60 hover:bg-emerald-200 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 rounded transition-colors shadow-2xs flex items-center gap-1"
+                                    title="Record vegetable weight and mark as harvested"
                                   >
-                                    Harvest ✓
+                                    <Scale className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Harvest ✓</span>
                                   </button>
 
                                   <button
@@ -377,33 +432,57 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
                         </div>
                       )}
 
-                      {/* Harvested History */}
+                      {/* Harvested & Completed History */}
                       {harvestedPlants.length > 0 && (
                         <div className="pt-2">
-                          <div className="text-xs font-semibold text-stone-400 dark:text-stone-500 mb-1.5 uppercase">
-                            Harvested & Completed ({harvestedPlants.length})
+                          <div className="text-xs font-semibold text-stone-400 dark:text-stone-500 mb-1.5 uppercase flex items-center justify-between">
+                            <span>Harvested Crops ({harvestedPlants.length})</span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 lowercase font-mono">
+                              contributes to seasonal yield chart
+                            </span>
                           </div>
                           <div className="divide-y divide-stone-100 dark:divide-stone-800 bg-stone-50/50 dark:bg-stone-800/30 rounded border border-stone-100 dark:border-stone-800">
-                            {harvestedPlants.map((item) => (
-                              <div
-                                key={item.id}
-                                className="p-2.5 flex items-center justify-between text-xs text-stone-500 dark:text-stone-400"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                                  <span className="line-through">{item.plantName}</span>
-                                  <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono">
-                                    (Sown {item.sownDate})
-                                  </span>
-                                </div>
-                                <button
-                                  onClick={() => onToggleHarvested(bed.id, item.id)}
-                                  className="text-xs text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 underline"
+                            {harvestedPlants.map((item) => {
+                              const estWeight = item.harvestWeightLbs || getEstimatedHarvestWeight(item.plantId, item.category);
+
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="p-2.5 flex items-center justify-between text-xs text-stone-500 dark:text-stone-400"
                                 >
-                                  Restore to active
-                                </button>
-                              </div>
-                            ))}
+                                  <div className="flex items-center gap-2.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span className="line-through font-medium text-stone-700 dark:text-stone-300">
+                                      {item.plantName}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-mono font-semibold">
+                                      ⚖️ {estWeight.toFixed(1)} lbs
+                                    </span>
+                                    <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono hidden sm:inline">
+                                      ({item.harvestedDate || item.expectedHarvestDate})
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleOpenHarvestModal(bed.id, item)}
+                                      className="text-[11px] text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-0.5"
+                                      title="Edit recorded weight"
+                                    >
+                                      <Edit2 className="w-2.5 h-2.5" />
+                                      <span>Edit Weight</span>
+                                    </button>
+                                    <span className="text-stone-300 dark:text-stone-700">·</span>
+                                    <button
+                                      onClick={() => onToggleHarvested(bed.id, item.id)}
+                                      className="text-[11px] text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 underline"
+                                    >
+                                      Restore
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -424,6 +503,21 @@ export const BedPlannerView: React.FC<BedPlannerViewProps> = ({
           })
         )}
       </div>
+
+      {/* Log Harvest Modal */}
+      <LogHarvestModal
+        isOpen={isHarvestModalOpen}
+        onClose={() => {
+          setIsHarvestModalOpen(false);
+          setTargetPlanting(null);
+        }}
+        beds={beds}
+        targetBedId={targetBedId}
+        targetPlanting={targetPlanting}
+        onConfirmHarvest={(bedId, plantEntryId, details) => {
+          onLogHarvest(bedId, plantEntryId, details);
+        }}
+      />
     </div>
   );
 };

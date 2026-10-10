@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LocationData, GardenBed, Plant, SowingMethod, PlantingAction } from './types/garden';
+import { LocationData, GardenBed, Plant, SowingMethod, PlantingAction, PlantCategory } from './types/garden';
 import { DEFAULT_LOCATION, POPULAR_LOCATIONS } from './data/locations';
 import { PLANTS } from './data/plants';
 import { calculateSeasonState, getWeekNumber, getDateFromWeek } from './utils/frostCalculator';
@@ -79,6 +79,77 @@ function MainApp() {
             method: 'overwinter',
             notes: 'Planted with 4 inches straw mulch'
           }
+        ],
+        harvestLogs: [
+          {
+            id: 'sample-h1',
+            plantId: 'spinach',
+            plantName: 'Spring Spinach',
+            category: 'leafy_greens',
+            bedId: 'bed-1',
+            bedName: 'Raised Bed #1 (Sun)',
+            harvestDate: `${currentYear}-05-20`,
+            weightLbs: 3.2,
+            count: 4,
+            notes: 'Crisp, sweet early spring harvest'
+          },
+          {
+            id: 'sample-h2',
+            plantId: 'sugar-snap-peas',
+            plantName: 'Sugar Snap Peas',
+            category: 'legumes',
+            bedId: 'bed-1',
+            bedName: 'Raised Bed #1 (Sun)',
+            harvestDate: `${currentYear}-06-18`,
+            weightLbs: 4.5,
+            notes: 'Abundant high trellis pods'
+          },
+          {
+            id: 'sample-h3',
+            plantId: 'zucchini',
+            plantName: 'Black Beauty Zucchini',
+            category: 'cucurbits',
+            bedId: 'bed-1',
+            bedName: 'Raised Bed #1 (Sun)',
+            harvestDate: `${currentYear}-07-28`,
+            weightLbs: 9.2,
+            count: 8,
+            notes: 'Prolific summer squash'
+          },
+          {
+            id: 'sample-h4',
+            plantId: 'tomato-indeterminate',
+            plantName: 'Cherokee Purple Tomato',
+            category: 'nightshades',
+            bedId: 'bed-1',
+            bedName: 'Raised Bed #1 (Sun)',
+            harvestDate: `${currentYear}-08-22`,
+            weightLbs: 14.8,
+            count: 22,
+            notes: 'Deep rich flavor, exceptional yield'
+          },
+          {
+            id: 'sample-h5',
+            plantId: 'bell-pepper',
+            plantName: 'Sweet Bell Pepper',
+            category: 'nightshades',
+            bedId: 'bed-1',
+            bedName: 'Raised Bed #1 (Sun)',
+            harvestDate: `${currentYear}-09-19`,
+            weightLbs: 6.4,
+            notes: 'Thick-walled ripe bells'
+          },
+          {
+            id: 'sample-h6',
+            plantId: 'carrots',
+            plantName: 'Nantes Carrots',
+            category: 'roots',
+            bedId: 'bed-1',
+            bedName: 'Raised Bed #1 (Sun)',
+            harvestDate: `${currentYear}-10-04`,
+            weightLbs: 5.1,
+            notes: 'Sweetened after autumn chill'
+          }
         ]
       },
       {
@@ -100,6 +171,30 @@ function MainApp() {
             expectedHarvestDate: new Date(today.getTime() + 42 * 86400000).toISOString().split('T')[0],
             method: 'direct',
             notes: 'Winter salad greens under glass'
+          }
+        ],
+        harvestLogs: [
+          {
+            id: 'sample-h7',
+            plantId: 'lettuce-butterhead',
+            plantName: 'Butterhead Lettuce',
+            category: 'leafy_greens',
+            bedId: 'bed-2',
+            bedName: 'Herb & Greens Cold Frame',
+            harvestDate: `${currentYear}-05-12`,
+            weightLbs: 2.4,
+            notes: 'Tender heads from under glass'
+          },
+          {
+            id: 'sample-h8',
+            plantId: 'basil-genovese',
+            plantName: 'Genovese Basil',
+            category: 'herbs',
+            bedId: 'bed-2',
+            bedName: 'Herb & Greens Cold Frame',
+            harvestDate: `${currentYear}-07-15`,
+            weightLbs: 1.8,
+            notes: 'Pesto batch harvested'
           }
         ]
       }
@@ -309,6 +404,148 @@ function MainApp() {
     );
   };
 
+  const handleLogHarvest = (
+    bedId: string,
+    plantEntryId: string | null,
+    harvestDetails: {
+      plantId: string;
+      plantName: string;
+      category: PlantCategory;
+      weightLbs: number;
+      harvestDate: string;
+      count?: number;
+      notes?: string;
+    }
+  ) => {
+    setBeds((prev) =>
+      prev.map((b) => {
+        if (b.id !== bedId) return b;
+
+        if (plantEntryId) {
+          return {
+            ...b,
+            plants: b.plants.map((p) => {
+              if (p.id !== plantEntryId) return p;
+              return {
+                ...p,
+                isHarvested: true,
+                harvestedDate: harvestDetails.harvestDate,
+                harvestWeightLbs: harvestDetails.weightLbs,
+                harvestCount: harvestDetails.count,
+                harvestNotes: harvestDetails.notes,
+              };
+            }),
+          };
+        }
+
+        const newRecord = {
+          id: `harvest-${Date.now()}`,
+          plantId: harvestDetails.plantId,
+          plantName: harvestDetails.plantName,
+          category: harvestDetails.category,
+          bedId: b.id,
+          bedName: b.name,
+          harvestDate: harvestDetails.harvestDate,
+          weightLbs: harvestDetails.weightLbs,
+          count: harvestDetails.count,
+          notes: harvestDetails.notes,
+        };
+
+        return {
+          ...b,
+          harvestLogs: [newRecord, ...(b.harvestLogs || [])],
+        };
+      })
+    );
+  };
+
+  const handleSeedSampleHarvests = () => {
+    const year = currentYear;
+    const sampleHarvests = [
+      {
+        id: 'sample-h1',
+        plantId: 'spinach',
+        plantName: 'Spring Spinach',
+        category: 'leafy_greens' as const,
+        bedId: beds[0]?.id || 'bed-1',
+        bedName: beds[0]?.name || 'Raised Bed #1',
+        harvestDate: `${year}-05-20`,
+        weightLbs: 3.2,
+        count: 4,
+        notes: 'Crisp, sweet early spring harvest',
+      },
+      {
+        id: 'sample-h2',
+        plantId: 'sugar-snap-peas',
+        plantName: 'Sugar Snap Peas',
+        category: 'legumes' as const,
+        bedId: beds[0]?.id || 'bed-1',
+        bedName: beds[0]?.name || 'Raised Bed #1',
+        harvestDate: `${year}-06-18`,
+        weightLbs: 4.5,
+        notes: 'Abundant high trellis pods',
+      },
+      {
+        id: 'sample-h3',
+        plantId: 'zucchini',
+        plantName: 'Black Beauty Zucchini',
+        category: 'cucurbits' as const,
+        bedId: beds[0]?.id || 'bed-1',
+        bedName: beds[0]?.name || 'Raised Bed #1',
+        harvestDate: `${year}-07-28`,
+        weightLbs: 9.2,
+        count: 8,
+        notes: 'Prolific summer squash',
+      },
+      {
+        id: 'sample-h4',
+        plantId: 'tomato-indeterminate',
+        plantName: 'Cherokee Purple Tomato',
+        category: 'nightshades' as const,
+        bedId: beds[0]?.id || 'bed-1',
+        bedName: beds[0]?.name || 'Raised Bed #1',
+        harvestDate: `${year}-08-22`,
+        weightLbs: 14.8,
+        count: 22,
+        notes: 'Deep rich flavor, exceptional yield',
+      },
+      {
+        id: 'sample-h5',
+        plantId: 'bell-pepper',
+        plantName: 'Sweet Bell Pepper',
+        category: 'nightshades' as const,
+        bedId: beds[0]?.id || 'bed-1',
+        bedName: beds[0]?.name || 'Raised Bed #1',
+        harvestDate: `${year}-09-19`,
+        weightLbs: 6.4,
+        notes: 'Thick-walled ripe bells',
+      },
+      {
+        id: 'sample-h6',
+        plantId: 'carrots',
+        plantName: 'Nantes Carrots',
+        category: 'roots' as const,
+        bedId: beds[0]?.id || 'bed-1',
+        bedName: beds[0]?.name || 'Raised Bed #1',
+        harvestDate: `${year}-10-04`,
+        weightLbs: 5.1,
+        notes: 'Sweetened after autumn chill',
+      },
+    ];
+
+    setBeds((prev) =>
+      prev.map((b, idx) => {
+        if (idx === 0) {
+          return {
+            ...b,
+            harvestLogs: sampleHarvests,
+          };
+        }
+        return b;
+      })
+    );
+  };
+
   const handleOpenAddModal = (plant: Plant, method: PlantingAction['actionType']) => {
     let convMethod: SowingMethod = 'direct';
     if (method === 'sow_indoors') convMethod = 'indoor';
@@ -388,6 +625,8 @@ function MainApp() {
             onUpdateBedWatering={handleUpdateBedWatering}
             onWaterBedNow={handleWaterBedNow}
             onWaterAllDueBeds={handleWaterAllDueBeds}
+            onLogHarvest={handleLogHarvest}
+            onSeedSampleHarvests={handleSeedSampleHarvests}
           />
         )}
 
